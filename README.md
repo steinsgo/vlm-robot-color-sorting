@@ -46,10 +46,12 @@ https://github.com/user-attachments/assets/93f907f5-6c96-4eb3-babd-b46292f15680
 ├── configs/phase4.yaml                    # Phase 4 matching evaluation configuration
 ├── configs/phase5.yaml                    # Phase 5 VLM adapter configuration
 ├── configs/phase6.yaml                    # Phase 6 confidence evaluation configuration
+├── configs/phase8.yaml                    # Phase 8 collision-proxy insertion configuration
 ├── scripts/generate_peg_hole_dataset.py   # Phase 3 dataset generator
 ├── scripts/evaluate_matching.py           # Phase 4 matching evaluator
 ├── scripts/evaluate_vlm.py                 # Phase 5 VLM evaluator
 ├── scripts/evaluate_confidence.py          # Phase 6 confidence/risk evaluator
+├── scripts/evaluate_insertion.py           # Phase 8 physics-assisted fit evaluator
 ├── scripts/generate_report.py               # Phase 7 figures/CSV/GIF generator
 ├── results/                                # Phase 7 report artifacts
 ├── tests/                                  # Phase 3.5 fairness regression tests
@@ -173,6 +175,17 @@ python scripts/generate_report.py --phase6-json evaluations/phase6/aggregate.jso
 ```
 
 The generated report distinguishes reproduced/preliminary Chamfer results from the proposed confidence-aware extension and records known synthetic-data limitations in [results/README.md](results/README.md).
+
+### Phase 8 Collision-Proxy Insertion Validation
+
+Run the physics-assisted fit check on the 100-episode test split:
+
+```bash
+python scripts/generate_peg_hole_dataset.py --config configs/peg_hole.yaml --output-dir datasets/peg_hole_v2_phase8
+python scripts/evaluate_insertion.py --config configs/phase8.yaml
+```
+
+Phase 8 drops a collision-enabled peg into a perimeter-wall/floor proxy for each candidate and records wall contacts, settling height, lateral displacement, target insertion, distractor rejection, and agreement with the analytic fit label. The proxy is intentionally not presented as a full contact-rich robot insertion controller.
 
 ---
 

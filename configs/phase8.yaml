@@ -1,0 +1,13 @@
+dataset: datasets/peg_hole_v2_phase8
+output_dir: evaluations/phase8
+split: test
+steps: 720
+time_step: 0.0041666666667
+start_height: 0.35
+floor_z: 0.025
+floor_thickness: 0.025
+wall_height: 0.20
+wall_thickness: 0.012
+position_tolerance: 0.025
+height_tolerance: 0.02
+velocity_tolerance: 0.08

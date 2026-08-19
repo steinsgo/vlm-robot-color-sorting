@@ -6,6 +6,8 @@
 
 本次修改针对 [专家评估.md](专家评估.md) 指出的实验公平性、评测有效性和复现工程问题完成了 Phase 3.5 修复。
 
+随后开始 Phase 8，加入 collision-enabled peg、perimeter-wall/floor opening proxy、插入轨迹和明确的 wall-contact/settling 成功判据。
+
 ### 数据与标签
 
 - 将 peg–hole 数据集升级为 `datasets/peg_hole_v2`。
@@ -81,6 +83,26 @@ Phase 6 的 confidence 不是 BLIP confidence；`synthetic_flip` 是镜像增强
 - `results/risk_coverage.png`
 - `results/phase7_demo.gif`（36 秒）
 - `results/summary.csv`（364 条 condition/fixed-coverage 汇总）
+
+### Phase 8 collision-proxy insertion validation
+
+命令：
+
+```text
+python scripts/generate_peg_hole_dataset.py --config configs/peg_hole.yaml --output-dir datasets/peg_hole_v2_phase8
+python scripts/evaluate_insertion.py --config configs/phase8.yaml
+```
+
+在 100 个 test episode 上完成 300 次候选试验：
+
+| 指标 | 结果 | 95% Wilson CI |
+| --- | ---: | --- |
+| target insertion success | 100% | [96.3%, 100.0%] |
+| distractor rejection | 100% | [98.1%, 100.0%] |
+| episode-level all-distractors rejection | 100% | [96.3%, 100.0%] |
+| analytic fit / physical proxy agreement | 100% | [98.7%, 100.0%] |
+
+结果文件为 `evaluations/phase8/aggregate.json` 和 `results.jsonl`。这是一个 perimeter wall ring + floor 的 collision proxy；它证明了当前 analytic fit 标签与该物理代理一致，不等价于真实机械臂插入成功率。
 
 ## 验证记录
 

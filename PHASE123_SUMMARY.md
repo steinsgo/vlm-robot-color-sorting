@@ -15,6 +15,7 @@
 6. Phase 5 提供 mock 与 BLIP VQA adapter；BLIP 的 YES/NO 分数明确标记为 forced-label proxy。
 7. Phase 6 在 Chamfer baseline 上执行遮挡、候选池扩展、置信度、abstention、ECE 和 risk–coverage 评测。
 8. Phase 7 生成报告图表、CSV 和 GIF，并从实际结果动态选择示例 episode。
+9. Phase 8 为每个候选运行 collision-enabled peg 的插入代理试验，验证 analytic fit 与物理 proxy 的一致性。
 
 最安全的项目表述是：
 
@@ -188,7 +189,25 @@ python scripts/generate_report.py `
 - [tests/test_phase35_fairness.py](tests/test_phase35_fairness.py)：平分 abstention、几何 fit 和 100 episode 配置回归测试。
 - [.github/workflows/ci.yml](.github/workflows/ci.yml)：compile、单元测试和 smoke test。
 
-## 11. 当前边界
+## 11. Phase 8：collision-proxy insertion validation
+
+```powershell
+python scripts/generate_peg_hole_dataset.py --config configs/peg_hole.yaml --output-dir datasets/peg_hole_v2_phase8
+python scripts/evaluate_insertion.py --config configs/phase8.yaml
+```
+
+Phase 8 对 100 个 test episode 的 300 个候选分别执行 PyBullet drop/insertion trial。每个 opening 由 perimeter wall ring 和 collision floor 构成，记录 wall contact、最终高度、横向位移和 settling 状态。
+
+| 指标 | 结果 | 95% Wilson CI |
+| --- | ---: | --- |
+| target insertion success | 100% | [96.3%, 100.0%] |
+| distractor rejection | 100% | [98.1%, 100.0%] |
+| all distractors rejected per episode | 100% | [96.3%, 100.0%] |
+| analytic/physical fit agreement | 100% | [98.7%, 100.0%] |
+
+结果位于本地 `evaluations/phase8/`。Phase 8 使用的是 physics-assisted collision proxy，不是完整的机械臂接近、接触力控制、摩擦辨识或真实插入动力学实验；因此这些结果只能说明当前 analytic fit 标签与该代理的一致性。
+
+## 12. 当前边界
 
 目前准确的研究定位是“simulation-assisted, preliminary matching pipeline”。以下结论仍不能从本仓库实验推出：
 

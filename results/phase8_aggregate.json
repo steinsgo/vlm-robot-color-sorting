@@ -1,0 +1,21 @@
+{
+  "schema_version": "phase8.v1",
+  "dataset": "datasets/peg_hole_v2_phase8",
+  "split": "test",
+  "num_episodes": 100,
+  "num_candidate_trials": 300,
+  "target_insertion_success_rate": 1.0,
+  "target_insertion_success_ci95": [0.9630051925239981, 0.9999999999999999],
+  "distractor_rejection_rate": 1.0,
+  "distractor_rejection_ci95": [0.9811539940816791, 1.0],
+  "episode_all_distractors_rejected_rate": 1.0,
+  "episode_all_distractors_rejected_ci95": [0.9630051925239981, 0.9999999999999999],
+  "candidate_fit_agreement": 1.0,
+  "candidate_fit_agreement_ci95": [0.9873565700022643, 0.9999999999999999],
+  "outcome_counts": {
+    "collision_proxy_inserted": 100,
+    "perimeter_wall_contact": 200
+  },
+  "geometry_definition": "collision proxy with perimeter wall ring and floor; not a full insertion controller",
+  "success_definition": "no perimeter wall contact, settled near floor height, and bounded lateral displacement"
+}

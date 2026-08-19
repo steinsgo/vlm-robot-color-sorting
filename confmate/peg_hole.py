@@ -455,6 +455,8 @@ class PegHoleScene:
                 "peg_family": self.family,
                 "hole_family": hole_family,
                 "hole_variant": hole_variant,
+                "peg_yaw_deg": peg_yaw,
+                "hole_yaw_deg": hole_yaw,
             }
             x, y = self.candidate_positions[hole_id]
             self.body_ids[hole_id] = _create_visual_body(
