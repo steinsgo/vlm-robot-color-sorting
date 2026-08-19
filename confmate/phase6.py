@@ -22,6 +22,7 @@ from PIL import Image, ImageDraw, ImageOps
 
 from .phase4 import EpisodeRecord, load_episodes, load_observation
 from .phase4 import chamfer_distance
+from .metrics import binary_summary
 
 
 OCCLUSION_LEVELS = {
@@ -40,13 +41,15 @@ class CandidateAsset:
     images_by_view: Dict[str, Image.Image]
 
 
-def _rank(scores: Mapping[str, float]) -> Tuple[str, List[str], float, float]:
+def _rank(scores: Mapping[str, float]) -> Tuple[Optional[str], List[str], float, float]:
     ranked = sorted(scores.items(), key=lambda item: (-item[1], item[0]))
     if not ranked:
-        raise ValueError("Cannot rank an empty candidate score mapping")
+        return None, [], 0.0, 0.0
     top1 = float(ranked[0][1])
     top2 = float(ranked[1][1]) if len(ranked) > 1 else top1
-    return ranked[0][0], [name for name, _ in ranked], top1, top1 - top2
+    margin = top1 - top2
+    tied = len(ranked) > 1 and math.isclose(top1, top2, rel_tol=1e-8, abs_tol=1e-8)
+    return (None if tied else ranked[0][0]), [name for name, _ in ranked], top1, margin
 
 
 def _margin_confidence(top1: float, top2: float) -> float:
@@ -151,10 +154,12 @@ def _stability_confidence(
     peg_by_view: Mapping[str, Image.Image],
     holes_by_view: Mapping[str, Mapping[str, Image.Image]],
     view_ids: Sequence[str],
-    base_prediction: str,
+    base_prediction: Optional[str],
     seed: int,
     repeats: int,
 ) -> float:
+    if base_prediction is None:
+        return 0.0
     if repeats <= 0:
         return 1.0
     stable = 0
@@ -292,8 +297,8 @@ def evaluate_sample(
     predicted, ranked, top1, margin = _rank(fused)
     target = record.ground_truth["target_hole_id"]
     view_predictions = {view: _rank(per_view[view])[0] for view in view_ids}
-    votes = Counter(view_predictions.values())
-    consistency = max(votes.values()) / len(view_ids)
+    votes = Counter(prediction for prediction in view_predictions.values() if prediction is not None)
+    consistency = max(votes.values()) / len(view_ids) if votes else 0.0
     confidence_values = {
         "margin": _margin_confidence(top1, top1 - margin),
         "multi_view_consistency": float(consistency),
@@ -316,6 +321,7 @@ def evaluate_sample(
         "occlusion_ratio": occlusion_ratio,
         "view_set": view_set_name,
         "views": list(view_ids),
+        "evaluation_seed": seed,
         "view_note": "synthetic_flip is a deterministic augmentation, not a third PyBullet camera view"
         if "synthetic_flip" in view_ids
         else "native PyBullet crop views",
@@ -327,6 +333,8 @@ def evaluate_sample(
         "ranked_hole_ids": ranked,
         "top_1_correct": predicted == target,
         "top_3_correct": target in ranked[:3],
+        "prediction_status": "uncertain" if predicted is None else "predicted",
+        "uncertainty_reason": "score_tie" if predicted is None else None,
         "candidate_scores": fused,
         "scores_by_view": per_view,
         "view_predictions": view_predictions,
@@ -501,6 +509,16 @@ def _group_summary(rows: Sequence[dict], method: str, threshold: float) -> List[
                 "num_samples": len(group),
                 "top_1_accuracy": float(np.mean([row["top_1_correct"] for row in group])),
                 "top_3_accuracy": float(np.mean([row["top_3_correct"] for row in group])),
+                "num_uncertain": sum(row.get("prediction_status") == "uncertain" for row in group),
+                "uncertainty_rate": float(
+                    np.mean([row.get("prediction_status") == "uncertain" for row in group])
+                ),
+                "episode_top_1_ci95": binary_summary(
+                    row["top_1_correct"] for row in group
+                )["accuracy_ci95"],
+                "episode_top_3_ci95": binary_summary(
+                    row["top_3_correct"] for row in group
+                )["accuracy_ci95"],
                 "yaw_mae_deg": None,
                 "yaw_defined_count": 0,
                 "confidence_mean": float(np.mean([row["confidence_values"][method] for row in group])),
@@ -598,6 +616,7 @@ def evaluate_phase6(
     }
     test_unrejected = {
         "num_samples": len(all_rows["test"]),
+        "episode_count": len(test_records),
         "top_1_accuracy": float(np.mean([row["top_1_correct"] for row in all_rows["test"]])) if all_rows["test"] else None,
         "top_3_accuracy": float(np.mean([row["top_3_correct"] for row in all_rows["test"]])) if all_rows["test"] else None,
         "yaw_mae_deg": None,
@@ -651,6 +670,7 @@ def evaluate_phase6(
             "Yaw is not estimated by the Chamfer baseline; yaw MAE is undefined and reported as null.",
             "The current dataset has two native views; synthetic_flip is an augmentation control for the three-view condition.",
             "Phase 6 evaluates the Chamfer baseline because the Phase 5 BLIP score is a forced-label proxy and is not calibrated.",
+            "Confidence intervals in condition groups treat each episode as one Bernoulli observation; rows are never split into image crops.",
         ],
     }
     output_root.mkdir(parents=True, exist_ok=True)
@@ -662,4 +682,3 @@ def evaluate_phase6(
             for row in all_rows[split]:
                 handle.write(json.dumps({"split_group": split, **row}, sort_keys=True) + "\n")
     return output_root
-

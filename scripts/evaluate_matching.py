@@ -37,7 +37,7 @@ def main(argv=None) -> int:
 
     with args.config.open("r", encoding="utf-8") as handle:
         config = yaml.safe_load(handle) or {}
-    dataset_value = args.dataset or Path(config.get("dataset", "datasets/peg_hole_v1"))
+    dataset_value = args.dataset or Path(config.get("dataset", "datasets/peg_hole_v2"))
     output_value = args.output_dir or Path(config.get("output_dir", "evaluations/phase4"))
     split = args.split or config.get("split", "test")
     modes = args.observation_modes or config.get("observation_modes", ["oracle_crop", "render_mask_assisted", "rgb_only"])

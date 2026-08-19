@@ -30,7 +30,7 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     with args.config.open("r", encoding="utf-8") as handle:
         config = yaml.safe_load(handle) or {}
-    dataset_value = args.dataset or Path(config.get("dataset", "datasets/peg_hole_v1"))
+    dataset_value = args.dataset or Path(config.get("dataset", "datasets/peg_hole_v2"))
     output_value = args.output_dir or Path(config.get("output_dir", "evaluations/phase6"))
     dataset_root = PROJECT_ROOT / dataset_value if not dataset_value.is_absolute() else dataset_value
     output_root = PROJECT_ROOT / output_value if not output_value.is_absolute() else output_value
@@ -74,4 +74,3 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

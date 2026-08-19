@@ -19,6 +19,7 @@
     "known_limitations": [
       "synthetic_flip third view",
       "crop-level occlusion",
+      "analytic fit is not insertion dynamics",
       "yaw undefined",
       "rgb_only not evaluated"
     ],

@@ -1,4 +1,4 @@
-dataset: datasets/peg_hole_v1
+dataset: datasets/peg_hole_v2
 output_dir: evaluations/phase6
 validation_split: val
 test_split: test
@@ -33,5 +33,5 @@ confidence_methods:
   - stability
 target_coverage: 0.8
 ece_bins: 10
-stability_repeats: 4
+stability_repeats: 2
 seed: 17

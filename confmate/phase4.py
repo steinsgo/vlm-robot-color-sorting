@@ -12,6 +12,8 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import numpy as np
 from PIL import Image
 
+from .metrics import binary_summary
+
 
 REQUIRED_METHODS = ("random", "chamfer", "clip_single", "clip_multi")
 
@@ -87,12 +89,16 @@ def load_observation(record: EpisodeRecord, mode: str, views: Sequence[str]) -> 
     return ObservationInputs(mode, tuple(views), peg_by_view, holes_by_view)
 
 
-def _rank(scores: Dict[str, float]) -> Tuple[str, List[str], float, float]:
+def _rank(scores: Dict[str, float]) -> Tuple[Optional[str], List[str], float, float]:
+    if not scores:
+        return None, [], 0.0, 0.0
     ranked = sorted(scores.items(), key=lambda item: (-item[1], item[0]))
     names = [name for name, _ in ranked]
     top1 = ranked[0][1]
     top2 = ranked[1][1] if len(ranked) > 1 else top1
-    return names[0], names, float(top1), float(top1 - top2)
+    margin = float(top1 - top2)
+    tied = len(ranked) > 1 and math.isclose(top1, top2, rel_tol=1e-8, abs_tol=1e-8)
+    return (None if tied else names[0]), names, float(top1), margin
 
 
 def _softmax_confidence(scores: Dict[str, float], temperature: float = 0.1) -> float:
@@ -213,6 +219,7 @@ def make_result(
     predicted, ranked, top_score, margin = _rank(scores)
     target = record.ground_truth["target_hole_id"]
     top3 = ranked[:3]
+    prediction_status = "uncertain" if predicted is None else "predicted"
     return {
         "episode_id": record.episode_id,
         "split": record.split,
@@ -229,6 +236,8 @@ def make_result(
         "matching_correct": predicted == target,
         "top_1_correct": predicted == target,
         "top_3_correct": target in top3,
+        "prediction_status": prediction_status,
+        "uncertainty_reason": "score_tie" if predicted is None else None,
         "top_1_top_2_margin": margin,
         "confidence": _softmax_confidence(scores),
         "confidence_definition": "max softmax over candidate scores, temperature=0.1; not calibrated",
@@ -253,6 +262,7 @@ def make_skipped_result(record: EpisodeRecord, mode: str, method: str, reason: s
         "method": method,
         "model": model_name,
         "status": "skipped",
+        "prediction_status": "skipped",
         "skip_reason": reason,
         "candidate_scores": {},
         "predicted_hole_id": None,
@@ -289,6 +299,12 @@ def aggregate_results(results: Sequence[dict]) -> dict:
                 "matching_accuracy": float(np.mean([item["matching_correct"] for item in group])),
                 "top_1_accuracy": float(np.mean([item["top_1_correct"] for item in group])),
                 "top_3_accuracy": float(np.mean([item["top_3_correct"] for item in group])),
+                "num_uncertain": sum(item.get("prediction_status") == "uncertain" for item in group),
+                "uncertainty_rate": float(
+                    np.mean([item.get("prediction_status") == "uncertain" for item in group])
+                ),
+                "top_1_ci95": binary_summary(item["top_1_correct"] for item in group)["accuracy_ci95"],
+                "top_3_ci95": binary_summary(item["top_3_correct"] for item in group)["accuracy_ci95"],
                 "mean_top_1_top_2_margin": float(np.mean([item["top_1_top_2_margin"] for item in group])),
                 "mean_confidence": float(np.mean([item["confidence"] for item in group])),
                 "yaw_mae_deg": float(np.mean(yaw_values)) if yaw_values else None,

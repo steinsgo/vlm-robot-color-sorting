@@ -106,33 +106,21 @@ def _plot_match_example(record, phase4_root: Path, output: Path) -> None:
         score = result["candidate_scores"][candidate_id]
         marker = "TARGET / PREDICTED" if candidate_id == result["predicted_hole_id"] else "distractor"
         _show_image(axes[index], inputs.holes_by_view["top"][candidate_id], f"{candidate_id}\nscore={score:.3f} · {marker}")
-    fig.suptitle("Successful matching example (Chamfer baseline)", fontsize=13, weight="bold")
+    result_status = "correct" if result["predicted_hole_id"] == record.ground_truth["target_hole_id"] else "illustrative"
+    fig.suptitle(f"{result_status.title()} matching example (Chamfer baseline)", fontsize=13, weight="bold")
     fig.text(0.5, 0.01, f"rank: {' > '.join(ranked)} · target={record.ground_truth['target_hole_id']}", ha="center", fontsize=9)
     fig.tight_layout(rect=(0, 0.04, 1, 1))
     _save_figure(fig, output)
 
 
-def _plot_failure_rejection(record, output: Path, threshold: float) -> None:
+def _plot_failure_rejection(record, output: Path, threshold: float, phase6_results: Path) -> None:
     source = load_observation(record, "oracle_crop", ["top", "oblique"])
-    seed = 1000017 + 100000 + 3000 + 100 + 1
-    peg, holes = _make_view_set(
-        source.peg_by_view,
-        source.holes_by_view,
-        ["top", "oblique"],
-        0.15,
-        seed,
-    )
-    score_rows = []
-    for candidate_id, image in holes["top"].items():
-        score_rows.append((candidate_id, -float(np.mean([0.0]))))
-    # Use the Phase 6 JSON row for exact prediction/confidence; image display uses
-    # the same deterministic occlusion parameters above.
     phase6_rows = [
         json.loads(line)
-        for line in (PROJECT_ROOT / "evaluations" / "phase6" / "results.jsonl").read_text(encoding="utf-8").splitlines()
+        for line in phase6_results.read_text(encoding="utf-8").splitlines()
         if line
     ]
-    row = next(
+    candidates = [
         item
         for item in phase6_rows
         if item["split_group"] == "test"
@@ -141,6 +129,24 @@ def _plot_failure_rejection(record, output: Path, threshold: float) -> None:
         and item["occlusion_level"] == "light"
         and item["view_set"] == "two_view"
         and item["requested_candidate_count"] == 3
+    ]
+    if not candidates:
+        raise ValueError(f"No Phase 6 light/two-view example for {record.episode_id}")
+    row = next(
+        (
+            item
+            for item in candidates
+            if not item["top_1_correct"]
+            and item["confidence_values"]["margin"] < threshold
+        ),
+        candidates[0],
+    )
+    peg, holes = _make_view_set(
+        source.peg_by_view,
+        source.holes_by_view,
+        row["views"],
+        row["occlusion_ratio"],
+        row["evaluation_seed"],
     )
     fig, axes = plt.subplots(1, 4, figsize=(13, 3.5))
     _show_image(axes[0], peg["top"], "peg · light occlusion")
@@ -216,6 +222,9 @@ def _write_summary_csv(aggregate: dict, output: Path) -> int:
                     "num_samples": row["num_samples"],
                     "top_1_accuracy": row["top_1_accuracy"],
                     "top_3_accuracy": row["top_3_accuracy"],
+                    "top_1_ci95": json.dumps(row.get("episode_top_1_ci95", [None, None])),
+                    "top_3_ci95": json.dumps(row.get("episode_top_3_ci95", [None, None])),
+                    "uncertainty_rate": row.get("uncertainty_rate", 0.0),
                     "confidence_mean": row["confidence_mean"],
                     "coverage": row["selective"]["coverage"],
                     "selective_accuracy": row["selective"]["selective_accuracy"],
@@ -240,6 +249,9 @@ def _write_summary_csv(aggregate: dict, output: Path) -> int:
                 "num_samples": aggregate["test"]["num_samples"],
                 "top_1_accuracy": "",
                 "top_3_accuracy": "",
+                "top_1_ci95": "",
+                "top_3_ci95": "",
+                "uncertainty_rate": "",
                 "confidence_mean": "",
                 "coverage": row["coverage"],
                 "selective_accuracy": accuracy,
@@ -282,9 +294,7 @@ def _demo_frame(stage: str, images: Sequence[Image.Image], labels: Sequence[str]
     return canvas
 
 
-def _create_demo_gif(records, output: Path, duration_seconds: float, fps: int) -> float:
-    success_record = _find_record(records, "test_asymmetric_000")
-    failure_record = _find_record(records, "test_asymmetric_001")
+def _create_demo_gif(records, output: Path, duration_seconds: float, fps: int, success_record, failure_record) -> float:
     success_inputs = load_observation(success_record, "oracle_crop", ["top"])
     failure_inputs = load_observation(failure_record, "oracle_crop", ["top"])
     scene = Image.open(success_record.episode_dir / "views" / "top" / "rgb.png").convert("RGB")
@@ -299,7 +309,7 @@ def _create_demo_gif(records, output: Path, duration_seconds: float, fps: int) -
         elif phase < 2 / 3:
             images, labels, stage = success_images, ["peg", "target hole", "distractor", "distractor"], "2 · successful matching"
         else:
-            images, labels, stage = failure_images, ["occluded peg", "target", "predicted wrong", "distractor"], "3 · failure → confidence-aware abstention"
+            images, labels, stage = failure_images, ["occluded peg", "candidate 1", "candidate 2", "candidate 3"], "3 - failure / confidence-aware abstention"
         frames.append(_demo_frame(stage, images, labels, (index + 1) / total, index, total))
     duration_ms = max(20, int(round(1000 / fps)))
     frames[0].save(output, save_all=True, append_images=frames[1:], duration=duration_ms, loop=0, optimize=False)
@@ -315,7 +325,7 @@ Generated from the fixed Phase 6 evaluation output.
 
 ```powershell
 python scripts/evaluate_confidence.py --config configs/phase6.yaml
-python scripts/generate_report.py --phase6-json evaluations/phase6/aggregate.json --dataset datasets/peg_hole_v1 --phase4-dir evaluations/phase4 --output-dir results
+python scripts/generate_report.py --phase6-json evaluations/phase6/aggregate.json --dataset datasets/peg_hole_v2 --phase4-dir evaluations/phase4 --output-dir results
 ```
 
 ## Artifact status
@@ -331,7 +341,7 @@ python scripts/generate_report.py --phase6-json evaluations/phase6/aggregate.jso
 
 ## Scope labels
 
-The matching result is a preliminary Chamfer baseline, not a claim of calibrated BLIP performance. The three-view condition uses `synthetic_flip`, and 5/8-candidate conditions borrow crops from other episodes. Occlusion is crop-level rectangular corruption rather than a newly rendered occluding object. Yaw is not estimated.
+The matching result is a preliminary Chamfer baseline, not a claim of calibrated BLIP performance. The v2 test split contains 100 independent episodes with randomized target IDs, candidate order, and candidate positions. The analytic fit label is footprint clearance, not insertion dynamics. The three-view condition uses `synthetic_flip`, and 5/8-candidate conditions borrow crops from other episodes. Occlusion is crop-level rectangular corruption rather than a newly rendered occluding object. Yaw is not estimated.
 """
     output.write_text(text, encoding="utf-8")
 
@@ -341,7 +351,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--phase6-json", type=Path, default=Path("evaluations/phase6/aggregate.json"))
     parser.add_argument("--phase6-results", type=Path, default=Path("evaluations/phase6/results.jsonl"))
     parser.add_argument("--phase4-dir", type=Path, default=Path("evaluations/phase4"))
-    parser.add_argument("--dataset", type=Path, default=Path("datasets/peg_hole_v1"))
+    parser.add_argument("--dataset", type=Path, default=Path("datasets/peg_hole_v2"))
     parser.add_argument("--output-dir", type=Path, default=Path("results"))
     parser.add_argument("--duration-seconds", type=float, default=36.0)
     parser.add_argument("--fps", type=int, default=5)
@@ -352,6 +362,7 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     dataset_root = PROJECT_ROOT / args.dataset if not args.dataset.is_absolute() else args.dataset
     phase6_json = PROJECT_ROOT / args.phase6_json if not args.phase6_json.is_absolute() else args.phase6_json
+    phase6_results = PROJECT_ROOT / args.phase6_results if not args.phase6_results.is_absolute() else args.phase6_results
     phase4_dir = PROJECT_ROOT / args.phase4_dir if not args.phase4_dir.is_absolute() else args.phase4_dir
     output = PROJECT_ROOT / args.output_dir if not args.output_dir.is_absolute() else args.output_dir
     output.mkdir(parents=True, exist_ok=True)
@@ -359,14 +370,62 @@ def main(argv=None) -> int:
     records = load_episodes(dataset_root, "all")
     test_records = [record for record in records if record.split == "test"]
     threshold = aggregate["validation"]["thresholds"]["margin"]["threshold"]
+    phase6_rows = [
+        json.loads(line) for line in phase6_results.read_text(encoding="utf-8").splitlines() if line
+    ]
+    phase6_failure_ids = {
+        row["episode_id"]
+        for row in phase6_rows
+        if row["split_group"] == "test"
+        and row["observation_mode"] == "oracle_crop"
+        and row["occlusion_level"] == "light"
+        and row["view_set"] == "two_view"
+        and row["requested_candidate_count"] == 3
+        and not row["top_1_correct"]
+        and row["confidence_values"]["margin"] < threshold
+    }
+    phase4_examples = [
+        (record, _phase4_result(phase4_dir, "chamfer", "oracle_crop", "test", record.episode_id))
+        for record in test_records
+    ]
+    success_record = next(
+        (
+            record
+            for record, result in phase4_examples
+            if result["predicted_hole_id"] == record.ground_truth["target_hole_id"]
+        ),
+        test_records[0],
+    )
+    failure_record = next(
+        (
+            record
+            for record, result in phase4_examples
+            if record.episode_id in phase6_failure_ids
+        ),
+        next(
+            (
+                record
+                for record, result in phase4_examples
+                if result["predicted_hole_id"] != record.ground_truth["target_hole_id"]
+            ),
+            test_records[-1],
+        ),
+    )
     _plot_system_architecture(output / "system_architecture.png")
-    _plot_scene(_find_record(test_records, "test_asymmetric_000"), dataset_root, output / "simulation_scene.png")
-    _plot_match_example(_find_record(test_records, "test_asymmetric_000"), phase4_dir, output / "success_match.png")
-    _plot_failure_rejection(_find_record(test_records, "test_asymmetric_001"), output / "failure_rejection.png", threshold)
+    _plot_scene(success_record, dataset_root, output / "simulation_scene.png")
+    _plot_match_example(success_record, phase4_dir, output / "success_match.png")
+    _plot_failure_rejection(failure_record, output / "failure_rejection.png", threshold, phase6_results)
     _plot_occlusion_curve(aggregate, output / "accuracy_vs_occlusion.png")
     _plot_risk_coverage(aggregate, output / "risk_coverage.png")
     csv_rows = _write_summary_csv(aggregate, output / "summary.csv")
-    gif_seconds = _create_demo_gif(test_records, output / "phase7_demo.gif", args.duration_seconds, args.fps)
+    gif_seconds = _create_demo_gif(
+        test_records,
+        output / "phase7_demo.gif",
+        args.duration_seconds,
+        args.fps,
+        success_record,
+        failure_record,
+    )
     _write_results_readme(output / "README.md", csv_rows, gif_seconds)
     try:
         source_phase6 = str(phase6_json.relative_to(PROJECT_ROOT)).replace("\\", "/")
@@ -382,7 +441,7 @@ def main(argv=None) -> int:
             "baseline": "Chamfer matching on Phase 3 crops",
             "extension": "confidence-aware rejection and partial-observation evaluation",
             "preliminary": True,
-            "known_limitations": ["synthetic_flip third view", "crop-level occlusion", "yaw undefined", "rgb_only not evaluated"],
+            "known_limitations": ["synthetic_flip third view", "crop-level occlusion", "analytic fit is not insertion dynamics", "yaw undefined", "rgb_only not evaluated"],
         },
     }
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")

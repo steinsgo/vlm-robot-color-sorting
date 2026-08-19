@@ -1,4 +1,4 @@
-dataset: datasets/peg_hole_v1
+dataset: datasets/peg_hole_v2
 output_dir: evaluations/phase4
 split: test
 observation_modes:

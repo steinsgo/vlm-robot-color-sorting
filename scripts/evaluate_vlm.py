@@ -16,7 +16,8 @@ os.environ.setdefault("TRANSFORMERS_CACHE", str(PROJECT_ROOT / ".hf-cache-temp")
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from confmate.phase4 import load_episodes, load_observation  # noqa: E402
+from confmate.metrics import binary_summary  # noqa: E402
+from confmate.phase4 import _rank, load_episodes, load_observation  # noqa: E402
 from confmate.vlm import BlipVQAMatcher, MockVLMMatcher, VLMMatcher  # noqa: E402
 
 
@@ -35,6 +36,7 @@ def _make_skipped(record, mode: str, adapter: str, reason: str, model: str) -> d
         "adapter": adapter,
         "model": model,
         "status": "skipped",
+        "prediction_status": "skipped",
         "skip_reason": reason,
         "candidate_results": {},
         "predicted_hole_id": None,
@@ -53,18 +55,23 @@ def _evaluate_record(record, mode: str, matcher: VLMMatcher, prompt: str, views:
         holes = {view: inputs.holes_by_view[view][candidate_id] for view in views}
         candidate_results[candidate_id] = matcher.match(inputs.peg_by_view, holes, prompt)
 
-    ranked = sorted(
-        candidate_results,
-        key=lambda candidate_id: (-candidate_results[candidate_id]["score"], candidate_id),
+    scores = {
+        candidate_id: float(result["score"])
+        for candidate_id, result in candidate_results.items()
+    }
+    predicted, ranked, top_score, margin = _rank(scores)
+    predicted_result = candidate_results[predicted] if predicted is not None else None
+    adapter_name = (
+        predicted_result.get("adapter", matcher.model_name)
+        if predicted_result is not None
+        else next(iter(candidate_results.values())).get("adapter", matcher.model_name)
     )
-    predicted = ranked[0]
-    predicted_result = candidate_results[predicted]
     return {
         "episode_id": record.episode_id,
         "split": record.split,
         "seed": record.seed,
         "observation_mode": mode,
-        "adapter": predicted_result.get("adapter", matcher.model_name),
+        "adapter": adapter_name,
         "model": matcher.model_name,
         "prompt": prompt,
         "views": views,
@@ -73,7 +80,10 @@ def _evaluate_record(record, mode: str, matcher: VLMMatcher, prompt: str, views:
         "predicted_hole_id": predicted,
         "ground_truth_hole_id": record.ground_truth["target_hole_id"],
         "matching_correct": predicted == record.ground_truth["target_hole_id"],
-        "confidence": predicted_result["score"],
+        "prediction_status": "uncertain" if predicted is None else "predicted",
+        "uncertainty_reason": "score_tie" if predicted is None else None,
+        "top_1_top_2_margin": margin,
+        "confidence": top_score,
         "confidence_definition": "highest adapter YES/NO score; not calibrated",
     }
 
@@ -94,6 +104,13 @@ def _aggregate(results: List[dict]) -> dict:
                 "adapter": adapter,
                 "num_episodes": len(group),
                 "matching_accuracy": sum(item["matching_correct"] for item in group) / len(group),
+                "matching_ci95": binary_summary(
+                    item["matching_correct"] for item in group
+                )["accuracy_ci95"],
+                "num_uncertain": sum(item.get("prediction_status") == "uncertain" for item in group),
+                "uncertainty_rate": sum(
+                    item.get("prediction_status") == "uncertain" for item in group
+                ) / len(group),
                 "mean_confidence": sum(item["confidence"] for item in group) / len(group),
             }
         )
@@ -128,7 +145,7 @@ def main(argv=None) -> int:
     adapter = args.adapter or config.get("adapter", "mock")
     model_name = args.model_name or config.get("model_name", "Salesforce/blip-vqa-base")
     split = args.split or config.get("split", "test")
-    dataset_value = args.dataset or Path(config.get("dataset", "datasets/peg_hole_v1"))
+    dataset_value = args.dataset or Path(config.get("dataset", "datasets/peg_hole_v2"))
     configured_output = config.get("output_dir", f"evaluations/phase5/{adapter}")
     if args.output_dir is None and config.get("adapter", adapter) != adapter:
         configured_output = f"evaluations/phase5/{adapter}"

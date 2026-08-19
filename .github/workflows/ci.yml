@@ -1,0 +1,22 @@
+name: ConfMate CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Install simulation dependencies
+        run: pip install -r requirements-base.txt
+      - name: Compile project
+        run: python -m compileall confmate scripts
+      - name: Run regression tests
+        run: python -m unittest discover -s tests
+      - name: Run architecture smoke test
+        run: python scripts/smoke_test.py

@@ -1,0 +1,12 @@
+# Direct dependency snapshot recorded by scripts/env_report.py on 2026-08-19.
+# torch==1.12.1+cu116 requires the matching PyTorch CUDA wheel index.
+pybullet==3.2.5
+numpy==1.23.5
+torch==1.12.1+cu116
+transformers==4.40.2
+pillow==11.1.0
+matplotlib==3.9.4
+requests==2.32.3
+accelerate==0.15.0
+pyyaml==6.0.2
+tokenizers==0.19.1

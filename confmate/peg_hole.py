@@ -77,10 +77,11 @@ OBSERVATION_MODE_SPECS = {
 class PegHoleConfig:
     seed: int = 17
     episodes_per_family: int = 2
+    episodes_per_split: Optional[Dict[str, int]] = None
     num_candidates: int = 3
     image_width: int = 480
     image_height: int = 360
-    output_dir: str = "datasets/peg_hole_v1"
+    output_dir: str = "datasets/peg_hole_v2"
     views: Tuple[str, ...] = ("top", "oblique")
     observation_modes: Tuple[str, ...] = tuple(OBSERVATION_MODE_SPECS)
 
@@ -108,8 +109,16 @@ class PegHoleConfig:
     def validate(self) -> None:
         if self.episodes_per_family < 1:
             raise ValueError("episodes_per_family must be positive")
+        if self.episodes_per_split is not None:
+            unknown_splits = set(self.episodes_per_split) - set(SPLIT_FAMILIES)
+            if unknown_splits:
+                raise ValueError(f"Unknown episode split(s): {sorted(unknown_splits)}")
+            if any(int(count) < 1 for count in self.episodes_per_split.values()):
+                raise ValueError("episodes_per_split counts must be positive")
         if self.num_candidates < 2:
             raise ValueError("num_candidates must be at least 2")
+        if self.num_candidates > 8:
+            raise ValueError("num_candidates must be at most 8 for the configured board layout")
         if self.image_width < 64 or self.image_height < 64:
             raise ValueError("image dimensions are too small")
         unknown_views = set(self.views) - set(VIEW_CONFIGS)
@@ -231,6 +240,70 @@ def shape_parts(family: str, role: str = "peg", variant: str = "target") -> List
     return parts
 
 
+def geometric_fit_check(
+    peg_family: str,
+    hole_family: str,
+    hole_variant: str,
+    peg_yaw_deg: float,
+    hole_yaw_deg: float,
+    clearance_epsilon: float = 1e-6,
+) -> dict:
+    """Check analytic footprint clearance for one candidate pair.
+
+    This is a geometric compatibility label, not insertion dynamics. It makes
+    the distinction between appearance matching and nominal fit explicit.
+    """
+    family_match = peg_family == hole_family
+    variant_is_target = hole_variant == "target"
+    yaw_delta = abs(((hole_yaw_deg - peg_yaw_deg + 180.0) % 360.0) - 180.0)
+    yaw_aligned = yaw_delta <= 1e-6
+    base = {
+        "fit_margin": None,
+        "family_match": family_match,
+        "variant_is_target": variant_is_target,
+        "yaw_aligned": yaw_aligned,
+    }
+    if not family_match:
+        return {**base, "compatible": False, "reason": "shape_family_mismatch"}
+    if not variant_is_target:
+        return {**base, "compatible": False, "reason": "clearance_variant_is_distractor"}
+    if not yaw_aligned:
+        return {**base, "compatible": False, "reason": "yaw_misaligned"}
+
+    peg_parts = shape_parts(peg_family, "peg")
+    hole_parts = shape_parts(hole_family, "hole", variant=hole_variant)
+    if len(peg_parts) != len(hole_parts):
+        return {**base, "compatible": False, "reason": "part_count_mismatch"}
+
+    margins = []
+    for peg_part, hole_part in zip(peg_parts, hole_parts):
+        if peg_part["kind"] != hole_part["kind"]:
+            return {**base, "compatible": False, "reason": "part_kind_mismatch"}
+        if peg_part["kind"] == "box":
+            peg_size = [2.0 * value for value in peg_part["half_extents"][:2]]
+            hole_size = [2.0 * value for value in hole_part["half_extents"][:2]]
+        else:
+            peg_size = [2.0 * peg_part["radius"]] * 2
+            hole_size = [2.0 * hole_part["radius"]] * 2
+        margins.extend(hole - peg for hole, peg in zip(hole_size, peg_size))
+    fit_margin = float(min(margins)) if margins else 0.0
+    compatible = fit_margin > clearance_epsilon
+    return {
+        **base,
+        "compatible": compatible,
+        "reason": "positive_analytic_clearance" if compatible else "non_positive_clearance",
+        "fit_margin": fit_margin,
+    }
+
+
+def _candidate_positions(num_candidates: int) -> List[Tuple[float, float]]:
+    positions = [
+        (-0.65, -0.42), (-0.22, -0.42), (0.22, -0.42), (0.65, -0.42),
+        (-0.65, -0.10), (-0.22, -0.10), (0.22, -0.10), (0.65, -0.10),
+    ]
+    return positions[:num_candidates]
+
+
 def _yaw_for_family(family: str, rng: random.Random) -> Tuple[Optional[float], Optional[int]]:
     if family == "cylinder":
         return None, None
@@ -317,12 +390,19 @@ class PegHoleScene:
         self.rng = random.Random(scene_seed)
         self.body_ids: Dict[str, int] = {}
         self.hole_order: List[str] = []
+        self.target_hole_id: str = ""
+        self.candidate_fit: Dict[str, dict] = {}
+        self.candidate_positions: Dict[str, Tuple[float, float]] = {}
         self.target_yaw_deg, self.yaw_symmetry_order = _yaw_for_family(family, self.rng)
 
     def build(self) -> dict:
         p.resetSimulation()
         p.setGravity(0.0, 0.0, -9.81)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
+        self.body_ids = {}
+        self.hole_order = []
+        self.candidate_fit = {}
+        self.candidate_positions = {}
         _create_board()
 
         peg_yaw = self.target_yaw_deg or 0.0
@@ -333,25 +413,50 @@ class PegHoleScene:
             color=[0.10, 0.30, 0.90, 1.0],
         )
 
-        target_hole_id = "hole_000"
-        hole_positions = [(-0.52, -0.18), (0.0, -0.18), (0.52, -0.18), (0.0, -0.48)]
-        for index in range(self.config.num_candidates):
-            hole_id = f"hole_{index:03d}"
-            self.hole_order.append(hole_id)
-            if index == 0:
+        self.hole_order = [
+            f"hole_{index:03d}" for index in range(self.config.num_candidates)
+        ]
+        self.rng.shuffle(self.hole_order)
+        hole_positions = _candidate_positions(self.config.num_candidates)
+        self.rng.shuffle(hole_positions)
+        self.target_hole_id = self.rng.choice(self.hole_order)
+        same_family_distractor_id = self.rng.choice(
+            [hole_id for hole_id in self.hole_order if hole_id != self.target_hole_id]
+        )
+        different_families = [family for family in SHAPE_FAMILIES if family != self.family]
+
+        for order_index, hole_id in enumerate(self.hole_order):
+            self.candidate_positions[hole_id] = hole_positions[order_index]
+            is_target = hole_id == self.target_hole_id
+            if is_target:
                 hole_family = self.family
-                parts = shape_parts(hole_family, "hole", variant="target")
+                hole_variant = "target"
+                parts = shape_parts(hole_family, "hole", variant=hole_variant)
                 hole_yaw = peg_yaw
-            elif index == 1:
+            elif hole_id == same_family_distractor_id:
                 # A close-size, same-family distractor that still cannot mate.
                 hole_family = self.family
-                parts = shape_parts(hole_family, "hole", variant="distractor")
+                hole_variant = "distractor"
+                parts = shape_parts(hole_family, "hole", variant=hole_variant)
                 hole_yaw = float(self.rng.choice([0, 30, 60, 90, 120, 150]))
             else:
-                hole_family = SHAPE_FAMILIES[(SHAPE_FAMILIES.index(self.family) + index) % len(SHAPE_FAMILIES)]
-                parts = shape_parts(hole_family, "hole", variant="distractor")
+                hole_family = self.rng.choice(different_families)
+                hole_variant = "distractor"
+                parts = shape_parts(hole_family, "hole", variant=hole_variant)
                 hole_yaw = float(self.rng.choice([0, 30, 60, 90, 120, 150]))
-            x, y = hole_positions[index % len(hole_positions)]
+            self.candidate_fit[hole_id] = {
+                **geometric_fit_check(
+                    self.family,
+                    hole_family,
+                    hole_variant,
+                    peg_yaw,
+                    hole_yaw,
+                ),
+                "peg_family": self.family,
+                "hole_family": hole_family,
+                "hole_variant": hole_variant,
+            }
+            x, y = self.candidate_positions[hole_id]
             self.body_ids[hole_id] = _create_visual_body(
                 parts,
                 position=[x, y, 0.0625],
@@ -362,8 +467,9 @@ class PegHoleScene:
         p.stepSimulation()
         return {
             "peg_id": "peg_000",
-            "target_hole_id": target_hole_id,
+            "target_hole_id": self.target_hole_id,
             "candidate_hole_ids": list(self.hole_order),
+            "candidate_fit": self.candidate_fit,
             "target_yaw_deg": self.target_yaw_deg,
             "yaw_symmetry_order": self.yaw_symmetry_order,
         }
@@ -405,11 +511,15 @@ class PegHoleScene:
             "shape_family": self.family,
             "geometry_instance_id": f"{self.family}_instance_{self.scene_seed}",
             "peg_id": "peg_000",
-            "target_hole_id": "hole_000",
+            "target_hole_id": self.target_hole_id,
             "target_yaw_deg": self.target_yaw_deg,
             "yaw_symmetry_order": self.yaw_symmetry_order,
             "candidate_hole_ids": list(self.hole_order),
-            "valid_target_hole_ids": ["hole_000"],
+            "valid_target_hole_ids": [self.target_hole_id],
+            "candidate_fit": self.candidate_fit,
+            "fit_check_definition": (
+                "analytic ordered-part footprint clearance; not insertion dynamics"
+            ),
             "occlusion_ratio": 0.0,
             "view_ids": list(view_ids),
             "observation_modes": list(self.config.observation_modes),
@@ -464,6 +574,10 @@ def _write_observations(
         "shape_family": scene.family,
         "body_ids_are_generation_artifacts": True,
         "objects": {name: {"body_id": body_id} for name, body_id in scene.body_ids.items()},
+        "candidate_positions": {
+            name: list(position) for name, position in scene.candidate_positions.items()
+        },
+        "candidate_fit": scene.candidate_fit,
     }
     _write_json(episode_dir / "scene_metadata.json", scene_metadata)
 
@@ -479,14 +593,29 @@ def generate_dataset(config: PegHoleConfig, project_root: Optional[Path] = None)
 
     master_rng = random.Random(config.seed)
     manifest = {
-        "dataset_name": "confmate_peg_hole_v1",
-        "generator_version": "phase3",
+        "dataset_name": "confmate_peg_hole_v2",
+        "generator_version": "phase3.5",
         "seed": config.seed,
         "config": config.to_dict(),
         "split_policy": {
             "type": "shape_family_disjoint",
             "families": {split: list(families) for split, families in SPLIT_FAMILIES.items()},
             "test_is_disjoint_from_train_and_val": True,
+        },
+        "episode_independence": {
+            "unit": "one deterministic PyBullet scene per scene_seed",
+            "scene_seed_source": "master seed PRNG draw for each generated scene",
+            "test_episode_count": (
+                config.episodes_per_split.get("test", config.episodes_per_family)
+                if config.episodes_per_split
+                else config.episodes_per_family
+            ),
+        },
+        "candidate_assignment_policy": {
+            "target_hole_id": "uniformly sampled from candidate IDs per episode",
+            "candidate_order": "shuffled per episode before crop-file assignment",
+            "candidate_positions": "shuffled per episode",
+            "tie_policy": "evaluation must abstain when the top two scores are equal",
         },
         "observation_modes": OBSERVATION_MODE_SPECS,
         "episodes": [],
@@ -499,7 +628,12 @@ def generate_dataset(config: PegHoleConfig, project_root: Optional[Path] = None)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         for split, families in SPLIT_FAMILIES.items():
             for family in families:
-                for episode_index in range(config.episodes_per_family):
+                episodes_per_family = (
+                    config.episodes_per_split.get(split, config.episodes_per_family)
+                    if config.episodes_per_split
+                    else config.episodes_per_family
+                )
+                for episode_index in range(episodes_per_family):
                     scene_seed = master_rng.randrange(0, 2**31 - 1)
                     episode_id = f"{split}_{family}_{episode_index:03d}"
                     scene = PegHoleScene(config, scene_seed, family, episode_id)

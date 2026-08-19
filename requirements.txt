@@ -1,9 +1,3 @@
-pybullet
-numpy
-torch
-transformers>=4.40.0
-pillow
-matplotlib
-requests
-accelerate
-pyyaml
+# Full local installation: simulation/perception plus optional VLM adapters.
+-r requirements-base.txt
+-r requirements-vlm.txt

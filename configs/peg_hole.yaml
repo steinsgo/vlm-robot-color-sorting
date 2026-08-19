@@ -1,9 +1,13 @@
 seed: 17
 episodes_per_family: 2
+episodes_per_split:
+  train: 4
+  val: 20
+  test: 100
 num_candidates: 3
 image_width: 480
 image_height: 360
-output_dir: datasets/peg_hole_v1
+output_dir: datasets/peg_hole_v2
 views:
   - top
   - oblique

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "name": "Nabil-Miri/vlm-robot-color-sorting",
+    "url": "https://github.com/Nabil-Miri/vlm-robot-color-sorting.git",
+    "default_branch": "master",
+    "base_commit": "4d66dca6d3f5f527f8f0d4d7611f3cf99af37aa1"
+  },
+  "fork": {
+    "name": "steinsgo/vlm-robot-color-sorting",
+    "url": "https://github.com/steinsgo/vlm-robot-color-sorting.git",
+    "branch": "confmate-baseline"
+  },
+  "purpose": "Provenance lock for ConfMate changes; update deliberately after an upstream rebase."
+}

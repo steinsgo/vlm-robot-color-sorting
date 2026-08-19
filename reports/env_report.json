@@ -1,0 +1,43 @@
+{
+  "generated_at_utc": "2026-08-19T11:38:03.378438+00:00",
+  "git": {
+    "branch": "confmate-baseline",
+    "head": "fad3c299a8dcef9947568d8bf7b6a73c457ecb90",
+    "remotes": "fork\thttps://github.com/steinsgo/vlm-robot-color-sorting.git (fetch)\nfork\thttps://github.com/steinsgo/vlm-robot-color-sorting.git (push)\norigin\thttps://github.com/Nabil-Miri/vlm-robot-color-sorting.git (fetch)\norigin\thttps://github.com/Nabil-Miri/vlm-robot-color-sorting.git (push)",
+    "working_tree_dirty": true
+  },
+  "network": {
+    "http_proxy_configured": true,
+    "https_proxy_configured": true
+  },
+  "packages": {
+    "accelerate": "0.15.0",
+    "matplotlib": "3.9.4",
+    "numpy": "1.23.5",
+    "pillow": "11.1.0",
+    "pybullet": "3.2.5",
+    "pyyaml": "6.0.2",
+    "requests": "2.32.3",
+    "tokenizers": "0.19.1",
+    "torch": "1.12.1+cu116",
+    "transformers": "4.40.2"
+  },
+  "platform": {
+    "machine": "AMD64",
+    "release": "10",
+    "system": "Windows"
+  },
+  "python": {
+    "executable": "E:\\igp\\asako\\confmate\\confmate-vlm-pybullet\\.venv\\python.exe",
+    "version": "3.9.21 (main, Dec 11 2024, 16:35:24) [MSC v.1929 64 bit (AMD64)]"
+  },
+  "security_note": "Proxy URLs, credentials, tokens, and cache contents are intentionally omitted.",
+  "torch_runtime": {
+    "cuda_available": true,
+    "cuda_version": "11.6",
+    "device_count": 1,
+    "device_names": [
+      "NVIDIA GeForce RTX 3060 Laptop GPU"
+    ]
+  }
+}

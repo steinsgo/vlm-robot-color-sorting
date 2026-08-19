@@ -6,7 +6,7 @@ Generated from the fixed Phase 6 evaluation output.
 
 ```powershell
 python scripts/evaluate_confidence.py --config configs/phase6.yaml
-python scripts/generate_report.py --phase6-json evaluations/phase6/aggregate.json --dataset datasets/peg_hole_v1 --phase4-dir evaluations/phase4 --output-dir results
+python scripts/generate_report.py --phase6-json evaluations/phase6/aggregate.json --dataset datasets/peg_hole_v2 --phase4-dir evaluations/phase4 --output-dir results
 ```
 
 ## Artifact status
@@ -22,4 +22,4 @@ python scripts/generate_report.py --phase6-json evaluations/phase6/aggregate.jso
 
 ## Scope labels
 
-The matching result is a preliminary Chamfer baseline, not a claim of calibrated BLIP performance. The three-view condition uses `synthetic_flip`, and 5/8-candidate conditions borrow crops from other episodes. Occlusion is crop-level rectangular corruption rather than a newly rendered occluding object. Yaw is not estimated.
+The matching result is a preliminary Chamfer baseline, not a claim of calibrated BLIP performance. The v2 test split contains 100 independent episodes with randomized target IDs, candidate order, and candidate positions. The analytic fit label is footprint clearance, not insertion dynamics. The three-view condition uses `synthetic_flip`, and 5/8-candidate conditions borrow crops from other episodes. Occlusion is crop-level rectangular corruption rather than a newly rendered occluding object. Yaw is not estimated.

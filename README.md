@@ -1,6 +1,6 @@
 # PyBullet Robotic Arm Simulation with Vision-Language Models
 
-A Python simulation that combines PyBullet robotic arm control with zero-shot image-text matching capabilities using the CLIP vision-language model. This project was created as part of my exploration into applying vision-language models in robotics.
+A Python robotics repository containing the original PyBullet color-sorting demo and a reproducible ConfMate peg–hole matching prototype. The ConfMate results use simulation-assisted crops and synthetic corruption controls, and are reported as preliminary.
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/8edd7f96-cdcd-4495-b8e8-9ef2164e3d8a" alt="vlm (online-video-cutter" width="1000"/>
@@ -8,10 +8,12 @@ A Python simulation that combines PyBullet robotic arm control with zero-shot im
 
 ## Overview
 
-This project demonstrates:
+The repository contains:
+
 - **Physics-based robotic arm simulation** using PyBullet
-- **Vision-guided object selection** using CLIP vision-language model
-- **Intelligent pick and place operations** based on text prompts
+- **Vision-guided object selection** using CLIP
+- **Multi-view peg–hole candidate matching** with Chamfer, CLIP, mock VLM, and BLIP adapter baselines
+- **Confidence-aware abstention** and partial-observation evaluation
 
 For the current Phase 1–7 implementation status, environment notes, reproducibility commands, and known limitations, see [PHASE123_SUMMARY.md](PHASE123_SUMMARY.md).
 
@@ -50,6 +52,10 @@ https://github.com/user-attachments/assets/93f907f5-6c96-4eb3-babd-b46292f15680
 ├── scripts/evaluate_confidence.py          # Phase 6 confidence/risk evaluator
 ├── scripts/generate_report.py               # Phase 7 figures/CSV/GIF generator
 ├── results/                                # Phase 7 report artifacts
+├── tests/                                  # Phase 3.5 fairness regression tests
+├── reports/env_report.json                 # Reproducibility environment snapshot
+├── AGENTS.md                               # Scope and repository workflow
+├── upstream.lock                            # Upstream/fork provenance lock
 ├── scripts/run_baseline.py                # Phase 2 CLI entrypoint
 ├── scripts/smoke_test.py                  # Fast architecture smoke test
 ├── requirements.txt                       # Python dependencies
@@ -70,7 +76,7 @@ https://github.com/user-attachments/assets/93f907f5-6c96-4eb3-babd-b46292f15680
 ## Requirements
 
 ### Basic Requirements (for robot simulation)
-- Python 3.7+
+- Python 3.9+
 - PyBullet
 - NumPy
 
@@ -85,7 +91,7 @@ https://github.com/user-attachments/assets/93f907f5-6c96-4eb3-babd-b46292f15680
 ## Installation
 1. Clone or download this project:
    ```bash
-   git clone https://github.com/Nabil-Miri/vlm-robot-color-sorting.git
+   git clone https://github.com/steinsgo/vlm-robot-color-sorting.git
    ```
 
 2. (Recommended) Create and activate a Python virtual environment:
@@ -130,13 +136,23 @@ The baseline accepts `--seed`, `--num-objects`, and `--save-video` overrides. Ea
 
 ### Phase 3 Peg-Hole Dataset
 
-Generate deterministic peg-hole scenes with shape-family-disjoint splits:
+Generate deterministic peg-hole scenes with shape-family-disjoint splits. The current v2 configuration creates 16 train, 20 validation, and 100 independent test episodes:
 
 ```bash
 python scripts/generate_peg_hole_dataset.py --config configs/peg_hole.yaml
 ```
 
-Each episode contains `ground_truth.json`, top and oblique RGB views, and the explicitly labeled `oracle_crop`, `render_mask_assisted`, and `rgb_only` observation inputs. The test split holds out the `asymmetric` shape family from train and validation. Phase 3 generates matching data only; it does not claim to simulate insertion dynamics.
+Each episode contains `ground_truth.json`, top and oblique RGB views, randomized candidate IDs/order/positions, analytic fit labels, and the explicitly labeled `oracle_crop`, `render_mask_assisted`, and `rgb_only` observation inputs. The test split holds out the `asymmetric` shape family from train and validation. The analytic fit label is footprint clearance, not insertion dynamics.
+
+The matching/evaluation commands are:
+
+```bash
+python scripts/evaluate_matching.py --config configs/phase4.yaml
+python scripts/evaluate_vlm.py --config configs/phase5.yaml --adapter mock
+python scripts/evaluate_confidence.py --config configs/phase6.yaml
+```
+
+BLIP VQA is an integration adapter. Its YES/NO score is a forced-label proxy (`YES=0.75`, `NO=0.25`), not a calibrated token probability. Ties abstain as `uncertain`.
 
 ### Phase 6 Confidence and Abstention
 
@@ -153,7 +169,7 @@ The evaluator reports top-1/top-3 accuracy, ECE, risk-coverage, abstention, and 
 Generate the report figures, `summary.csv`, and a 36-second reproducible GIF:
 
 ```bash
-python scripts/generate_report.py --phase6-json evaluations/phase6/aggregate.json --dataset datasets/peg_hole_v1 --phase4-dir evaluations/phase4 --output-dir results --duration-seconds 36 --fps 5
+python scripts/generate_report.py --phase6-json evaluations/phase6/aggregate.json --phase6-results evaluations/phase6/results.jsonl --dataset datasets/peg_hole_v2 --phase4-dir evaluations/phase4 --output-dir results --duration-seconds 36 --fps 5
 ```
 
 The generated report distinguishes reproduced/preliminary Chamfer results from the proposed confidence-aware extension and records known synthetic-data limitations in [results/README.md](results/README.md).
