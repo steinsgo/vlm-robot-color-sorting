@@ -1,5 +1,7 @@
 # PyBullet Robotic Arm Simulation with Vision-Language Models
 
+[![ConfMate CI](https://github.com/steinsgo/vlm-robot-color-sorting/actions/workflows/ci.yml/badge.svg?branch=confmate-baseline)](https://github.com/steinsgo/vlm-robot-color-sorting/actions/workflows/ci.yml)
+
 A Python robotics repository containing the original PyBullet color-sorting demo and a reproducible ConfMate peg–hole matching prototype. The ConfMate results use simulation-assisted crops and synthetic corruption controls, and are reported as preliminary.
 
 <p align="center">
@@ -15,7 +17,7 @@ The repository contains:
 - **Multi-view peg–hole candidate matching** with Chamfer, CLIP, mock VLM, and BLIP adapter baselines
 - **Confidence-aware abstention** and partial-observation evaluation
 
-For the current Phase 1–7 implementation status, environment notes, reproducibility commands, and known limitations, see [PHASE123_SUMMARY.md](PHASE123_SUMMARY.md).
+The current implementation covers Phase 1–8, including collision-proxy insertion validation. For implementation status, environment notes, reproducibility commands, and known limitations, see [PHASE123_SUMMARY.md](PHASE123_SUMMARY.md) and [history.md](history.md).
 
 The robot captures images from its camera, analyzes them using CLIP, selects objects based on text descriptions, and performs pick-and-place operations, including color sorting and interactive placement.
 

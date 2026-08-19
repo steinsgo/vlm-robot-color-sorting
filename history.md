@@ -2,6 +2,11 @@
 
 更新时间：2026-08-19
 
+## GitHub 发布整理
+
+- README 状态更新为 Phase 1–8，并补充 Phase 8 collision-proxy 的定位说明。
+- 增加 GitHub Actions CI 徽章，并确认安装命令指向个人 fork。
+
 ## CI 依赖修复
 
 - GitHub Actions 原先只安装 `requirements-base.txt`，但 `scripts/smoke_test.py` 导入的 `SimulationBackend` 还需要 PyTorch 和 Transformers。
