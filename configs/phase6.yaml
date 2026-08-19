@@ -1,0 +1,37 @@
+dataset: datasets/peg_hole_v1
+output_dir: evaluations/phase6
+validation_split: val
+test_split: test
+observation_modes:
+  - oracle_crop
+  - render_mask_assisted
+occlusion_levels:
+  none: 0.0
+  light: 0.15
+  moderate: 0.35
+  heavy: 0.55
+view_sets:
+  - name: single_view
+    views:
+      - top
+  - name: two_view
+    views:
+      - top
+      - oblique
+  - name: three_view_augmented
+    views:
+      - top
+      - oblique
+      - synthetic_flip
+candidate_counts:
+  - 3
+  - 5
+  - 8
+confidence_methods:
+  - margin
+  - multi_view_consistency
+  - stability
+target_coverage: 0.8
+ece_bins: 10
+stability_repeats: 4
+seed: 17

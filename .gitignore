@@ -1,0 +1,7 @@
+.venv/
+.hf-cache-temp/
+runs/
+datasets/
+evaluations/
+__pycache__/
+*.py[cod]

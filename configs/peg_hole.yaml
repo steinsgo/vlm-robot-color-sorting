@@ -1,0 +1,13 @@
+seed: 17
+episodes_per_family: 2
+num_candidates: 3
+image_width: 480
+image_height: 360
+output_dir: datasets/peg_hole_v1
+views:
+  - top
+  - oblique
+observation_modes:
+  - oracle_crop
+  - render_mask_assisted
+  - rgb_only

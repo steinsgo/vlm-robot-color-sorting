@@ -44,14 +44,20 @@ class VisionLanguagePandaSimulation:
     for intelligent object selection and manipulation.
     """
     
-    def __init__(self, gui_mode=True, model_name="openai/clip-vit-base-patch32"):
+    def __init__(self, gui_mode=True, model_name="openai/clip-vit-base-patch32",
+                 num_objects=5, seed=17):
         """
         Initialize the simulation with both PyBullet physics and CLIP vision-language model.
         
         Args:
             gui_mode (bool): Whether to run simulation with GUI or headless
             model_name (str): Name of the CLIP model to use
+            num_objects (int): Number of scene objects to create (1-5)
+            seed (int): Seed used when selecting a subset of scene objects
         """
+        self.num_objects = max(1, int(num_objects))
+        self.seed = int(seed)
+
         # Initialize PyBullet simulation
         if gui_mode:
             self.physics_client = p.connect(p.GUI)
@@ -211,6 +217,15 @@ class VisionLanguagePandaSimulation:
             }
         ]
         
+        # Keep the original five-object scene by default.  A seeded subset is
+        # used for headless/CLI runs that request fewer objects.
+        if self.num_objects < len(object_configs):
+            rng = np.random.default_rng(self.seed)
+            selected_indices = sorted(
+                rng.choice(len(object_configs), size=self.num_objects, replace=False).tolist()
+            )
+            object_configs = [object_configs[index] for index in selected_indices]
+
         # Create each object
         for config in object_configs:
             object_id = self.create_object(config)

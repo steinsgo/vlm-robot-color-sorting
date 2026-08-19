@@ -1,0 +1,9 @@
+model_name: openai/clip-vit-base-patch32
+seed: 17
+num_objects: 5
+headless: false
+prompt: a red object
+output_dir: runs
+save_video: false
+video_fps: 4
+settle_steps: 240

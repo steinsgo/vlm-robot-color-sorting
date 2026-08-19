@@ -1,0 +1,13 @@
+dataset: datasets/peg_hole_v1
+output_dir: evaluations/phase5/mock
+adapter: mock
+model_name: Salesforce/blip-vqa-base
+split: test
+observation_modes:
+  - oracle_crop
+  - render_mask_assisted
+  - rgb_only
+prompt: Does the left peg fit the right hole? Answer only yes or no.
+views:
+  - top
+  - oblique

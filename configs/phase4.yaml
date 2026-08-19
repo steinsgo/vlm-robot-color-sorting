@@ -1,0 +1,17 @@
+dataset: datasets/peg_hole_v1
+output_dir: evaluations/phase4
+split: test
+observation_modes:
+  - oracle_crop
+  - render_mask_assisted
+  - rgb_only
+methods:
+  - random
+  - chamfer
+  - clip_single
+  - clip_multi
+model_name: openai/clip-vit-base-patch32
+seed: 17
+views:
+  - top
+  - oblique

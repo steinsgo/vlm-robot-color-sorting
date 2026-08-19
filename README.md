@@ -13,6 +13,8 @@ This project demonstrates:
 - **Vision-guided object selection** using CLIP vision-language model
 - **Intelligent pick and place operations** based on text prompts
 
+For the current Phase 1–7 implementation status, environment notes, reproducibility commands, and known limitations, see [PHASE123_SUMMARY.md](PHASE123_SUMMARY.md).
+
 The robot captures images from its camera, analyzes them using CLIP, selects objects based on text descriptions, and performs pick-and-place operations, including color sorting and interactive placement.
 
 
@@ -36,6 +38,20 @@ https://github.com/user-attachments/assets/93f907f5-6c96-4eb3-babd-b46292f15680
 ├── panda_vision_simulation.py             # Vision-guided robot simulation Class
 ├── color_sorting_vlm.py                   # Color sorting and interactive demo with VLM
 ├── simple_pick_place_demo.py              # Simple pick and place demo
+├── confmate/                              # Phase 2 simulation/perception/matching/control modules
+├── configs/baseline.yaml                  # Reproducible baseline configuration
+├── configs/peg_hole.yaml                  # Phase 3 scene generation configuration
+├── configs/phase4.yaml                    # Phase 4 matching evaluation configuration
+├── configs/phase5.yaml                    # Phase 5 VLM adapter configuration
+├── configs/phase6.yaml                    # Phase 6 confidence evaluation configuration
+├── scripts/generate_peg_hole_dataset.py   # Phase 3 dataset generator
+├── scripts/evaluate_matching.py           # Phase 4 matching evaluator
+├── scripts/evaluate_vlm.py                 # Phase 5 VLM evaluator
+├── scripts/evaluate_confidence.py          # Phase 6 confidence/risk evaluator
+├── scripts/generate_report.py               # Phase 7 figures/CSV/GIF generator
+├── results/                                # Phase 7 report artifacts
+├── scripts/run_baseline.py                # Phase 2 CLI entrypoint
+├── scripts/smoke_test.py                  # Fast architecture smoke test
 ├── requirements.txt                       # Python dependencies
 └── README.md                              # This documentation
 ```
@@ -100,6 +116,47 @@ When you start the demo, you will be prompted to choose a mode:
 
 
 Follow the on-screen instructions to interact with the robot and sorting zones.
+
+### Phase 2 Modular Baseline
+
+Run the architecture smoke test and the headless baseline from the repository root:
+
+```bash
+python scripts/smoke_test.py
+python scripts/run_baseline.py --config configs/baseline.yaml --headless
+```
+
+The baseline accepts `--seed`, `--num-objects`, and `--save-video` overrides. Each run writes `run_config.json`, `summary.json`, and `visualization.png` under `runs/`; `--save-video` additionally writes `episode.gif`. The visualization contains the camera frame, candidate boxes, selected target, and CLIP confidence scores.
+
+### Phase 3 Peg-Hole Dataset
+
+Generate deterministic peg-hole scenes with shape-family-disjoint splits:
+
+```bash
+python scripts/generate_peg_hole_dataset.py --config configs/peg_hole.yaml
+```
+
+Each episode contains `ground_truth.json`, top and oblique RGB views, and the explicitly labeled `oracle_crop`, `render_mask_assisted`, and `rgb_only` observation inputs. The test split holds out the `asymmetric` shape family from train and validation. Phase 3 generates matching data only; it does not claim to simulate insertion dynamics.
+
+### Phase 6 Confidence and Abstention
+
+Run the validation-calibrated confidence and partial-observation evaluation:
+
+```bash
+python scripts/evaluate_confidence.py --config configs/phase6.yaml
+```
+
+The evaluator reports top-1/top-3 accuracy, ECE, risk-coverage, abstention, and fixed-coverage comparisons for margin, multi-view consistency, and perturbation stability. Thresholds are selected on `val` and applied once to `test`. The current dataset has two native views; the three-view condition uses a clearly labeled deterministic mirrored-view augmentation.
+
+### Phase 7 Report and Demo
+
+Generate the report figures, `summary.csv`, and a 36-second reproducible GIF:
+
+```bash
+python scripts/generate_report.py --phase6-json evaluations/phase6/aggregate.json --dataset datasets/peg_hole_v1 --phase4-dir evaluations/phase4 --output-dir results --duration-seconds 36 --fps 5
+```
+
+The generated report distinguishes reproduced/preliminary Chamfer results from the proposed confidence-aware extension and records known synthetic-data limitations in [results/README.md](results/README.md).
 
 ---
 

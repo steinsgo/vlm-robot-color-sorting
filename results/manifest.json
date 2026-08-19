@@ -1,0 +1,29 @@
+{
+  "files": [
+    "README.md",
+    "accuracy_vs_occlusion.png",
+    "failure_rejection.png",
+    "manifest.json",
+    "phase7_demo.gif",
+    "risk_coverage.png",
+    "simulation_scene.png",
+    "success_match.png",
+    "summary.csv",
+    "system_architecture.png"
+  ],
+  "gif_seconds": 36.0,
+  "phase": 7,
+  "scope": {
+    "baseline": "Chamfer matching on Phase 3 crops",
+    "extension": "confidence-aware rejection and partial-observation evaluation",
+    "known_limitations": [
+      "synthetic_flip third view",
+      "crop-level occlusion",
+      "yaw undefined",
+      "rgb_only not evaluated"
+    ],
+    "preliminary": true
+  },
+  "source_phase6": "evaluations/phase6/aggregate.json",
+  "summary_csv_rows": 364
+}
