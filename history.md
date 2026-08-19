@@ -2,6 +2,12 @@
 
 更新时间：2026-08-19
 
+## CI 依赖修复
+
+- GitHub Actions 原先只安装 `requirements-base.txt`，但 `scripts/smoke_test.py` 导入的 `SimulationBackend` 还需要 PyTorch 和 Transformers。
+- 已将 `.github/workflows/ci.yml` 改为安装统一入口 `requirements.txt`，覆盖基础仿真依赖和 VLM 依赖。
+- 该修复只需推送到个人 fork，不需要合并回原仓库。
+
 ## 本次专家评估修复
 
 本次修改针对 [专家评估.md](专家评估.md) 指出的实验公平性、评测有效性和复现工程问题完成了 Phase 3.5 修复。
