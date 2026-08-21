@@ -145,3 +145,47 @@ python scripts/generate_report.py --phase6-json evaluations/phase6/aggregate.jso
 ## 当前研究边界
 
 当前项目应定位为 simulation-assisted preliminary matching pipeline。尚未完成真实碰撞/接触插入、RGB-only detection、真实遮挡物重渲染、yaw 估计或 token-level VLM calibration。后续若扩展研究结论，应优先加入这些实验。
+
+## 2026-08-21 — Phase 9 四对象 mission 升级
+
+- 将 Phase 9 从单 peg/多候选 hole 演示升级为四对象顺序任务：圆柱、球体、正方体、长方体。
+- 增加固定 seed 的伪随机 peg 槽位、yaw、hole ID 和执行顺序；hole 位置固定，每轮只保留尚未完成的 hole，完成后移除对应候选。
+- 保留 Chamfer、CLIP 和 oracle 三种匹配路径；confidence/margin gate 接受后才执行 Panda 抓取与插入。
+- Mission pass 条件改为四个 peg 全部正确抓取、对应插入、通过最终位姿检查，且无 perimeter-wall contact。
+- 增加明确的 `clearance=0.004 m` 配置、逐对象日志、mission-level `summary.json` 和 `phase9_mission.gif`。
+- 为圆柱和球体增加低矮环形 hole visual/collision proxy；为小物体增加显式记录的 guided release pose alignment，避免 IK/夹爪误差导致释放时偏移。
+- oracle headless 验证：四个对象全部成功，四个对象 wall contact 均为 0；该结果仍是 simulation prototype，不是 contact-rich insertion 或硬件成功率。
+- 同 seed baseline 记录：Chamfer 在第 3 个对象选错候选并正确失败；CLIP 第 1 个对象 confidence `0.2520`、margin `0.0031`，按默认 gate abstain。视觉 baseline 的失败/拒绝被保留在 `summary.json`，没有被当作 mission success。
+- 修复 Phase 9 GUI：动态 peg 现在直接使用 visual shape，删除了源位置残留的静态副本；每个动作显式记录 wall/floor collision proxy contacts。流程不再因单步失败而跳过剩余对象，四个对象都会被评估，只有 4/4 成功才 `MISSION_PASS=true`。
+
+## 2026-08-22 — Phase 9 几何与抓取判定修复
+
+- 将第四个形状从锥体替换为球体；默认任务固定为圆柱、球体、正方体、长方体。
+- 圆柱和球体 hole 改为低矮环形几何，内径按对应 peg 半径加 clearance，方块/长方体 hole 保留放大后的低矮盒壁；四个 hole 坐标固定，ID 和配对仍可打乱。
+- 修正环壁碰撞盒的径向/切向轴向，消除环壁宽度错误侵入开口造成的球体/圆柱假碰撞。
+- 抓取判定收紧为两根夹指 link 9/10 均接触、固定约束有效且 peg 实际抬升；失败时跳过插入并记录 `grasp_not_confirmed`。
+- 新增环形 hole、固定位置、动态 peg visual body 和双夹指抓取的回归测试；16 项 unittest、smoke test、compileall，以及 GUI/headless oracle 四物体运行均通过，`MISSION_PASS=true`、`COMPLETED=4/4`、四步 wall contact 均为 0。
+
+## 2026-08-22 — Phase 9 物理释放与姿态保持修复
+
+- 移除释放后的 `resetBasePositionAndOrientation` 路径；peg 从 hole rim 上方作为动态刚体自由下落，success 必须同时满足开口几何包含、对应 hole floor contact、稳定速度/角速度和零最终 wall contact。
+- 抓取后记录 peg 相对末端的刚体变换；Panda 在空中以不超过 15° 的分段 yaw 步进完成 hole 对齐，解决直接大角度 IK 跳转造成的 cuboid 姿态偏差。
+- 提高固定约束强度；搬运阶段暂时关闭已确认 grasp 的机器人-peg 内部碰撞，释放前张开夹爪后恢复；完成的 peg 仅关闭机器人回程碰撞，保留 peg-hole 碰撞和可视状态。
+- 修复多物体连续任务的 home 归位：为腕部关节设置速度上限并至少等待 360 个仿真步，避免上一轮腕部姿态导致下一次 IK 走错分支。
+- 最终 headless oracle 验证：`MISSION_PASS=true`、`COMPLETED=4/4`；四步 `teleport_used=false`、`physics_release_used=true`，且均为 `inside_hole_opening=true`、`floor_supported=true`、`wall_contact_count=0`。
+
+## 2026-08-22 — Phase 9 真实夹取闭环修复
+
+- 抓取不再只依据“link 9/10 出现过接触”判定；新增 `grasp_validation`，要求双夹指接触、两侧侧向接触、接触法向相反、夹指间隙在合理范围、peg 位于两指之间、没有双指完全闭合，并且 peg 保持在可支撑高度。
+- 发现长方体在夹爪闭合前的低位下降阶段会被指尖碰歪；按形状使用预抓取高度，正方体/长方体采用 `0.025 m`，圆柱/球体采用 `0.015 m`，避免把预接触扰动误认为成功抓取。
+- 多对象回程增加高位 Cartesian waypoint，防止机械臂从上一 hole 返回 home 时碰到尚未抓取的 peg；长方体 hole 增加显式 `0.003 m` 未缩放容差，但最终仍要求真实开口包含、floor contact、稳定和零 wall contact。
+- 新增抓取回归断言：每个成功对象都必须有有效 `grasp_validation`、固定约束和超过 `0.035 m` 的实际抬升；同时保留 `teleport_used=false` 和物理释放检查。
+- 最新 headless oracle 验证：`MISSION_PASS=true`、`COMPLETED=4/4`，四个对象均为双侧真实接触抓取，随后完成空中姿态调整和物理释放；结果写入 `runs/phase9_grasp_final_headless4/phase9_seed17/summary.json`（运行产物不纳入 Git）。
+- 最终 GUI oracle 验证：窗口模式下四个对象均完成机械臂抓取/空中调整/物理释放，`MISSION_PASS=true`、`COMPLETED=4/4`、总 wall contact 为 0；结果写入 `runs/phase9_grasp_final_gui/phase9_seed17/summary.json`（运行产物不纳入 Git）。
+
+## 2026-08-22 — Phase 9 运输夹指保持修复
+
+- 修复抓取后夹指继续向 `0.0` 收缩、穿过 peg 的问题：抓取确认时保存 link 9/10 的实测关节开度，固定约束运输期间持续保持该开度。
+- 保留抓取瞬间的真实双指接触验证；运输阶段为避免 finger contacts 与 hand-peg 固定约束互相施力，继续关闭内部碰撞，释放前张开夹爪并恢复碰撞。运输日志新增 `grasp_hold_joint_positions`、`transport_finger_joint_positions` 和 `transport_grasp_contact_count`。
+- 最后下降阶段加入中间高度 waypoint，避免保持夹指开度后长方体释放时发生 IK 分支跳变。
+- 最新 headless oracle：`MISSION_PASS=true`、`COMPLETED=4/4`；运输前后夹指关节变化不超过 `0.000002 rad`，四步 wall contact 均为 0。结果写入 `runs/phase9_gripper_hold_fix4/phase9_seed17/summary.json`（运行产物不纳入 Git）。

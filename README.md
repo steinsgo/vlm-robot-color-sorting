@@ -17,7 +17,7 @@ The repository contains:
 - **Multi-view peg–hole candidate matching** with Chamfer, CLIP, mock VLM, and BLIP adapter baselines
 - **Confidence-aware abstention** and partial-observation evaluation
 
-The current implementation covers Phase 1–9, including a confidence-gated Panda peg–hole GUI demonstration. Phase 9 is an interactive integration demo; its default CLIP mode is explicitly separated from the deterministic oracle control mode and the CLIP/Chamfer benchmark results. For implementation status, environment notes, reproducibility commands, and known limitations, see [PHASE123_SUMMARY.md](PHASE123_SUMMARY.md), [PHASE9_SUMMARY.md](PHASE9_SUMMARY.md), and [history.md](history.md).
+The current implementation covers Phase 1–9, including a four-object confidence-gated Panda peg–hole mission. Phase 9 is an interactive simulation prototype; its default CLIP mode is explicitly separated from the deterministic oracle control mode and the CLIP/Chamfer benchmark results. For implementation status, environment notes, reproducibility commands, and known limitations, see [PHASE123_SUMMARY.md](PHASE123_SUMMARY.md), [PHASE9_SUMMARY.md](PHASE9_SUMMARY.md), and [history.md](history.md).
 
 The robot captures images from its camera, analyzes them using CLIP, selects objects based on text descriptions, and performs pick-and-place operations, including color sorting and interactive placement.
 
@@ -49,18 +49,18 @@ https://github.com/user-attachments/assets/93f907f5-6c96-4eb3-babd-b46292f15680
 ├── configs/phase5.yaml                    # Phase 5 VLM adapter configuration
 ├── configs/phase6.yaml                    # Phase 6 confidence evaluation configuration
 ├── configs/phase8.yaml                    # Phase 8 collision-proxy insertion configuration
-├── configs/phase9.yaml                    # Phase 9 GUI insertion demo configuration
+├── configs/phase9.yaml                    # Phase 9 four-object mission configuration
 ├── scripts/generate_peg_hole_dataset.py   # Phase 3 dataset generator
 ├── scripts/evaluate_matching.py           # Phase 4 matching evaluator
 ├── scripts/evaluate_vlm.py                 # Phase 5 VLM evaluator
 ├── scripts/evaluate_confidence.py          # Phase 6 confidence/risk evaluator
 ├── scripts/evaluate_insertion.py           # Phase 8 physics-assisted fit evaluator
-├── scripts/run_phase9_demo.py              # Phase 9 confidence-gated Panda insertion demo
+├── scripts/run_phase9_demo.py              # Phase 9 four-object Panda insertion mission
 ├── scripts/generate_report.py               # Phase 7 figures/CSV/GIF generator
 ├── results/                                # Phase 7 report artifacts
 ├── tests/                                  # Phase 3.5 fairness regression tests
 ├── reports/env_report.json                 # Reproducibility environment snapshot
-├── PHASE9_SUMMARY.md                        # Phase 9 GUI demo results and limitations
+├── PHASE9_SUMMARY.md                        # Phase 9 mission results and limitations
 ├── AGENTS.md                               # Scope and repository workflow
 ├── upstream.lock                            # Upstream/fork provenance lock
 ├── scripts/run_baseline.py                # Phase 2 CLI entrypoint
@@ -192,7 +192,7 @@ python scripts/evaluate_insertion.py --config configs/phase8.yaml
 
 Phase 8 drops a collision-enabled peg into a perimeter-wall/floor proxy for each candidate and records wall contacts, settling height, lateral displacement, target insertion, distractor rejection, and agreement with the analytic fit label. The proxy is intentionally not presented as a full contact-rich robot insertion controller.
 
-### Phase 9 Confidence-Gated Panda Insertion Demo
+### Phase 9 Four-Object Confidence-Gated Panda Insertion Mission
 
 Run the CLIP-driven GUI integration demo from the repository root:
 
@@ -200,15 +200,23 @@ Run the CLIP-driven GUI integration demo from the repository root:
 python scripts/run_phase9_demo.py --matcher clip --keep-open
 ```
 
-The demo creates the ConfMate peg–hole board beside the Panda, renders top and oblique observations, displays candidate scores and confidence, and only executes the pick-and-insert action when the selective-prediction gate accepts the result. If the CLIP model is not cached, configure the same Hugging Face proxy used by the rest of the project before launching it.
+The mission creates four independent peg-hole pairs beside the Panda: cylinder, sphere, square, and cuboid. Seeded pseudo-random peg slots, yaws, candidate IDs, and execution order are shuffled, while hole positions remain fixed. Cylinder and sphere holes use low circular-ring collision proxies; square and cuboid holes use low box-wall proxies. A grasp is accepted only when both Panda finger links have side contacts with opposing normals, a nonzero reasonable finger gap, a peg-centered finger midpoint, a fixed grasp constraint, and an actual lift. After validation, the controller holds the measured finger joint openings instead of continuing toward a fully closed target, so the fingers do not visually pass through the constrained peg during transport. Finger/peg collision is intentionally disabled during the fixed-constraint carry to avoid contact-solver forces fighting the hand/peg constraint; real finger contacts are still required at grasp confirmation and collision is restored for release. The controller uses shape-specific pre-grasp heights, high safe waypoints on multi-object return paths, and an intermediate release descent so open fingers do not knock pending pegs or trigger an IK branch jump. The held peg is yaw-aligned in the air when needed, then released as a dynamic body above the rim; there is no pose teleport into the hole. A mission passes only when every released peg is inside its opening, supported by that hole's floor, stable, and free of final wall contact.
 
-For a deterministic controller-only check without downloading a model, use the explicit oracle control mode:
+For a deterministic controller and collision-proxy check without downloading a model, use:
+
+```bash
+python scripts/run_phase9_demo.py --headless --matcher oracle --no-sleep --no-video
+```
+
+The configured per-side geometric clearance is `4 mm`; the cuboid hole has an explicit additional `3 mm` pre-scale tolerance for the narrow-side IK residual. Effective proxy clearances and shape-specific pre-grasp heights are recorded alongside it in `summary.json`. If the CLIP model is not cached, configure the same Hugging Face proxy used by the rest of the project before launching it.
+
+The explicit oracle control mode is:
 
 ```bash
 python scripts/run_phase9_demo.py --matcher oracle --keep-open
 ```
 
-The `oracle` matcher is based on the analytic fit label; it demonstrates the robot/action path and must not be reported as VLM accuracy.
+The `oracle` matcher is based on the analytic corresponding-pair label; it demonstrates the four-object robot/action path and must not be reported as VLM accuracy. Other target holes are still candidates for each active peg, so the selected hole is removed only after a successful one-to-one insertion.
 
 To run the actual image matching baselines through the same GUI action gate:
 
@@ -217,7 +225,7 @@ python scripts/run_phase9_demo.py --matcher chamfer --keep-open
 python scripts/run_phase9_demo.py --matcher clip --keep-open
 ```
 
-The run writes `summary.json` and, by default, `phase9_demo.gif` under `runs/phase9/`. A CLIP or Chamfer prediction can abstain or select an incompatible candidate; the physical outcome is recorded rather than silently treated as a successful insertion. The hole geometry remains a collision proxy and the confidence is not calibrated token probability.
+The run writes `summary.json` and, by default, `phase9_mission.gif` under `runs/phase9/`. A Chamfer or CLIP prediction can abstain or select an incompatible candidate; the mission records that step as failed/abstained and continues evaluating the remaining objects. Only four successful physics releases produce `MISSION_PASS=true`; the CLI also prints `COMPLETED` and per-step statuses. The hole geometry remains a low-profile socket collision proxy, and confidence is not calibrated token probability. See [PHASE9_SUMMARY.md](PHASE9_SUMMARY.md) for the task specification and current oracle validation.
 
 ---
 

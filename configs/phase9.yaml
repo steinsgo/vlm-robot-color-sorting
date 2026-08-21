@@ -1,6 +1,8 @@
 seed: 17
-family: rectangle
-num_candidates: 3
+shape_families: [cylinder, sphere, square, cuboid]
+num_objects: 4
+clearance: 0.004
+slot_jitter: 0.018
 matcher: clip
 model_name: openai/clip-vit-base-patch32
 gui: true
@@ -8,8 +10,8 @@ keep_open: false
 save_video: true
 output_dir: runs/phase9
 video_fps: 8
-min_confidence: 0.35
-min_margin: 0.015
+min_confidence: 0.30
+min_margin: 0.010
 confidence_temperature: 0.50
 motion_steps: 180
 settle_steps: 180
