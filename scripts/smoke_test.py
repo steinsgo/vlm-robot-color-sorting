@@ -23,6 +23,7 @@ from confmate.matching import CLIPMatcher  # noqa: E402
 from confmate.peg_hole import OBSERVATION_MODE_SPECS, SHAPE_FAMILIES, PegHoleConfig, shape_parts  # noqa: E402
 from confmate.phase4 import REQUIRED_METHODS, chamfer_distance, random_scores  # noqa: E402
 from confmate.phase6 import OCCLUSION_LEVELS  # noqa: E402
+from confmate.phase9 import Phase9Config, decide_action  # noqa: E402
 from confmate.vlm import MockVLMMatcher, VLMMatcher  # noqa: E402
 from confmate.perception import SceneObservation, ScenePerception  # noqa: E402
 from confmate.simulation import SimulationBackend  # noqa: E402
@@ -40,6 +41,9 @@ def main() -> int:
         assert shape_parts(family, "hole", variant="distractor")
     assert set(REQUIRED_METHODS) == {"random", "chamfer", "clip_single", "clip_multi"}
     assert OCCLUSION_LEVELS == {"none": 0.0, "light": 0.15, "moderate": 0.35, "heavy": 0.55}
+    assert Phase9Config().family == "rectangle"
+    assert Phase9Config().matcher == "clip"
+    assert decide_action({"hole_000": 0.9, "hole_001": 0.1}, 0.5, 0.01)["execute"]
     assert list(random_scores(["a", "b"], seed=17)) == ["a", "b"]
     assert chamfer_distance(Image.new("RGB", (16, 16), "black"), Image.new("RGB", (16, 16), "black")) == 0.0
     mock_result = MockVLMMatcher().match(

@@ -17,7 +17,7 @@ The repository contains:
 - **Multi-view peg–hole candidate matching** with Chamfer, CLIP, mock VLM, and BLIP adapter baselines
 - **Confidence-aware abstention** and partial-observation evaluation
 
-The current implementation covers Phase 1–8, including collision-proxy insertion validation. For implementation status, environment notes, reproducibility commands, and known limitations, see [PHASE123_SUMMARY.md](PHASE123_SUMMARY.md) and [history.md](history.md).
+The current implementation covers Phase 1–9, including a confidence-gated Panda peg–hole GUI demonstration. Phase 9 is an interactive integration demo; its default CLIP mode is explicitly separated from the deterministic oracle control mode and the CLIP/Chamfer benchmark results. For implementation status, environment notes, reproducibility commands, and known limitations, see [PHASE123_SUMMARY.md](PHASE123_SUMMARY.md), [PHASE9_SUMMARY.md](PHASE9_SUMMARY.md), and [history.md](history.md).
 
 The robot captures images from its camera, analyzes them using CLIP, selects objects based on text descriptions, and performs pick-and-place operations, including color sorting and interactive placement.
 
@@ -49,15 +49,18 @@ https://github.com/user-attachments/assets/93f907f5-6c96-4eb3-babd-b46292f15680
 ├── configs/phase5.yaml                    # Phase 5 VLM adapter configuration
 ├── configs/phase6.yaml                    # Phase 6 confidence evaluation configuration
 ├── configs/phase8.yaml                    # Phase 8 collision-proxy insertion configuration
+├── configs/phase9.yaml                    # Phase 9 GUI insertion demo configuration
 ├── scripts/generate_peg_hole_dataset.py   # Phase 3 dataset generator
 ├── scripts/evaluate_matching.py           # Phase 4 matching evaluator
 ├── scripts/evaluate_vlm.py                 # Phase 5 VLM evaluator
 ├── scripts/evaluate_confidence.py          # Phase 6 confidence/risk evaluator
 ├── scripts/evaluate_insertion.py           # Phase 8 physics-assisted fit evaluator
+├── scripts/run_phase9_demo.py              # Phase 9 confidence-gated Panda insertion demo
 ├── scripts/generate_report.py               # Phase 7 figures/CSV/GIF generator
 ├── results/                                # Phase 7 report artifacts
 ├── tests/                                  # Phase 3.5 fairness regression tests
 ├── reports/env_report.json                 # Reproducibility environment snapshot
+├── PHASE9_SUMMARY.md                        # Phase 9 GUI demo results and limitations
 ├── AGENTS.md                               # Scope and repository workflow
 ├── upstream.lock                            # Upstream/fork provenance lock
 ├── scripts/run_baseline.py                # Phase 2 CLI entrypoint
@@ -188,6 +191,33 @@ python scripts/evaluate_insertion.py --config configs/phase8.yaml
 ```
 
 Phase 8 drops a collision-enabled peg into a perimeter-wall/floor proxy for each candidate and records wall contacts, settling height, lateral displacement, target insertion, distractor rejection, and agreement with the analytic fit label. The proxy is intentionally not presented as a full contact-rich robot insertion controller.
+
+### Phase 9 Confidence-Gated Panda Insertion Demo
+
+Run the CLIP-driven GUI integration demo from the repository root:
+
+```bash
+python scripts/run_phase9_demo.py --matcher clip --keep-open
+```
+
+The demo creates the ConfMate peg–hole board beside the Panda, renders top and oblique observations, displays candidate scores and confidence, and only executes the pick-and-insert action when the selective-prediction gate accepts the result. If the CLIP model is not cached, configure the same Hugging Face proxy used by the rest of the project before launching it.
+
+For a deterministic controller-only check without downloading a model, use the explicit oracle control mode:
+
+```bash
+python scripts/run_phase9_demo.py --matcher oracle --keep-open
+```
+
+The `oracle` matcher is based on the analytic fit label; it demonstrates the robot/action path and must not be reported as VLM accuracy.
+
+To run the actual image matching baselines through the same GUI action gate:
+
+```bash
+python scripts/run_phase9_demo.py --matcher chamfer --keep-open
+python scripts/run_phase9_demo.py --matcher clip --keep-open
+```
+
+The run writes `summary.json` and, by default, `phase9_demo.gif` under `runs/phase9/`. A CLIP or Chamfer prediction can abstain or select an incompatible candidate; the physical outcome is recorded rather than silently treated as a successful insertion. The hole geometry remains a collision proxy and the confidence is not calibrated token probability.
 
 ---
 

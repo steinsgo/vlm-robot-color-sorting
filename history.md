@@ -1,6 +1,15 @@
 # ConfMate 修改与实验历史
 
-更新时间：2026-08-19
+更新时间：2026-08-21
+
+## 2026-08-21 — Phase 9 Panda peg-hole GUI demo
+
+- 新增 `confmate/phase9.py`、`scripts/run_phase9_demo.py` 和 `configs/phase9.yaml`。
+- 复用原作者 Panda 的 URDF、末端 IK、夹爪关节和移动流程，创建独立的 ConfMate peg-hole GUI 场景。
+- 新增 tie-aware confidence gate：高置信度才执行抓取/插入，平局、低 margin 或低 confidence 时 abstain。
+- 新增 `oracle` 控制演示、Chamfer 和 CLIP 匹配模式；oracle 结果明确标记为 debug-only，不冒充 VLM 结果。
+- Phase 9 headless oracle 验证：`grasped=true`、`inserted=true`、`wall_contact_count=0`。
+- Phase 9 CLIP 验证（seed 17，演示阈值 `min_confidence=0.35`）：CLIP 选中真实 `hole_001`，confidence `0.3831`、margin `0.1059`，随后 `grasped=true`、`inserted=true`、`wall_contact_count=0`。
 
 ## GitHub 发布整理
 
